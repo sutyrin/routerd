@@ -85,8 +85,8 @@ namespace NAC {
             std::cerr << "  [content]" << std::string(part.Content(), part.ContentLength())
                       << "[/content]" << std::endl;
             std::cerr << "[/part]" << std::endl;
-            std::cerr << "=== end of parts ===" << std::endl;
         }
+        std::cerr << "=== end of parts ===" << std::endl;
         std::cerr << "== END OF OUTGOING REQUEST == " << std::endl;
     }
 
@@ -97,19 +97,29 @@ namespace NAC {
             bool somethingHappened(false);
             std::vector<std::string> failedServices;
 
+            // schedule next possible request
             for (auto&& treeIt : graph.Tree) {
                 if (!treeIt.second.empty() || request->IsInProgress(treeIt.first)) {
+                    // service has unprocessed dependency or is already being processed
                     continue;
                 }
 
-                somethingHappened = true;
+                const auto& service = graph.Services.at(treeIt.first);
+
+                if(!service.SendRawOutputOf.empty() && !request->GetOutGoingRequest().PartByName(service.SendRawOutputOf)) {
+                    // service has 'send_raw_output_of' directive, but needed output is not received yet.
+                    continue;
+                }
+
+                somethingHappened = true; // found service ready to be requested
 
 #ifdef AC_DEBUG_ROUTERD_PROXY
                 std::cerr << "graph.Services.at(" << treeIt.first << ");" << std::endl;
 #endif
 
-                const auto& service = graph.Services.at(treeIt.first);
                 const auto& host = GetHost(service.HostsFrom);
+
+                // try to connect (no sending yet), and schedule response behavior in a callback
                 auto rv = request->AwaitHTTP(host.Addr.c_str(), host.Port, [this, request, &service, args](
                     std::shared_ptr<NHTTP::TIncomingResponse> response,
                     std::shared_ptr<NHTTPServer::TClientBase> client
@@ -139,10 +149,10 @@ namespace NAC {
                         ProcessServiceResponse(request, response, service.Name, response.get());
                     }
 
-                    Iter(request, args);
+                    Iter(request, args); // recursion depth is limited by graph size, which is small.
                 });
 
-                if (!rv) {
+                if (!rv) { // could not connect
                     failedServices.push_back(service.Name);
                     continue;
                 }
@@ -152,25 +162,18 @@ namespace NAC {
 #ifdef AC_DEBUG_ROUTERD_PROXY
                 print_outgoing_request(request);
 #endif
+                // schedule payload to be sent to connected service
                 if (!service.SendRawOutputOf.empty()) {
-                    for (auto&& part : request->GetOutGoingRequest().Parts()) {
-                        std::string ContentDisposition;
-                        NHTTP::THeaderParams ContentDispositionParams;
-                        NHTTPUtils::ParseHeader(part.Headers(), "content-disposition",
-                                                ContentDisposition, ContentDispositionParams);
-                        for (auto [key, value]: ContentDispositionParams) {
-                            if (key == std::string("filename") && value == std::string("\"") + service.SendRawOutputOf + std::string("\"")) {
+                    auto &&outgoing_request = request->GetOutGoingRequest();
+                    auto matching_part = outgoing_request.PartByName(service.SendRawOutputOf);
+                    if (matching_part) {
 #ifdef AC_DEBUG_ROUTERD_PROXY
-                                std::cerr << "to service " << service.Name << " will send_raw_output_of " << service.SendRawOutputOf << std::endl;
+                        std::cerr << "to service " << service.Name
+                                  << " will send_raw_output_of " << service.SendRawOutputOf << std::endl;
 #endif
-                                rv->PushWriteQueueData(part.GetBody());
-                            }
-                        }
+                        rv->PushWriteQueueData(matching_part->GetBody());
                     }
-//                    auto msg = request->OutgoingRequest(service.Path, args);
-//                    msg.Memorize(request);
-//
-//                    rv->PushWriteQueueData(msg);
+
                 } else {
                     auto msg = request->OutgoingRequest(service.Path, args);
                     msg.Memorize(request);
@@ -179,6 +182,7 @@ namespace NAC {
                 }
             }
 
+            // erase failed services from graph
             for (const auto& name : failedServices) {
 #ifdef AC_DEBUG_ROUTERD_PROXY
                 std::cerr << "graph.Tree.erase(" << name << "); // as failed" << std::endl;
@@ -189,6 +193,7 @@ namespace NAC {
             std::cerr << "request->InProgressCount() == " << request->InProgressCount() << std::endl;
 #endif
 
+            // decide whether to continue loop while(true), exit with 500 (no way to complete request) or exit normally via break.
             if (request->InProgressCount() == 0) { // if we couldn't send any requests
                 std::cerr << "couldn't send any requests" << std::endl;
                 if (somethingHappened) { // but tried to
@@ -212,7 +217,7 @@ namespace NAC {
                         std::cerr << "(2) response was NOT sent, issuing 500" << std::endl;
                         request->Send500();
                     }
-                    std::cerr << "something was sent" << std::endl;
+                    std::cerr << "something was sent, which is ok" << std::endl;
                 }
             }
 
