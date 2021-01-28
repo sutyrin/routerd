@@ -46,9 +46,11 @@ namespace NAC {
         return hosts.front();
     }
 
-    void TRouterDProxyHandler::print_outgoing_request(std::shared_ptr<TRouterDRequest> request) const{
-        auto &outgoing_request = request->GetOutGoingRequest();
-        std::cerr << "== OUTGOING REQUEST == " << std::endl;
+
+#ifdef AC_DEBUG_ROUTERD_PROXY
+    void TRouterDProxyHandler::PrintOutgoingRequest(std::shared_ptr<TRouterDRequest> request) const{
+        auto& outgoingRequest = request->GetOutGoingRequest();
+        request->logger.debug("== OUTGOING REQUEST == ");
         std::cerr << "=== headers ===" << std::endl;
         for (auto && [header, values] : outgoing_request.Headers()) {
             std::cerr << "  " << header << ":";
@@ -190,6 +192,7 @@ namespace NAC {
                 graph.Tree.erase(name);
             }
 #ifdef AC_DEBUG_ROUTERD_PROXY
+            request->logger.debug("hey");
             std::cerr << "request->InProgressCount() == " << request->InProgressCount() << std::endl;
 #endif
 

@@ -9,7 +9,27 @@
 #include <chrono>
 #ifdef AC_DEBUG_ROUTERD_PROXY
 #include <iostream>
+#include <cstdlib>
+#include <ostream>
 #endif
+
+namespace NAC {
+    class TLogger {
+    public:
+        std::string RequestID;
+        void debug(const char *str) {
+            nlohmann::json out;
+
+            out["level"] = "DEBUG";
+            out["reqid"] = RequestID;
+            out["spuid"] = NULL;
+            out["spcid"] = NULL;
+            out["message"] = str;
+
+            std::cerr <<  out.dump() << std::endl;
+        }
+    };
+}
 
 namespace NAC {
     class TRouterDRequest : public NHTTP::TRequest {
@@ -27,8 +47,11 @@ namespace NAC {
             , Args(args)
             , StartTime_(std::chrono::steady_clock::now())
         {
+            auto request_id = Headers().find("x-request-id");
+            if (request_id != Headers().end()) {
+                logger.RequestID = request_id -> second[0];
+            }
         }
-
     protected:
         virtual void PrepareOutgoingRequest(NHTTP::TResponse&) {
         }
@@ -90,6 +113,9 @@ namespace NAC {
             return StartTime_;
         }
 
+    public:
+        TLogger logger;
+
     private:
         TArgs Args;
         bool OutgoingRequestInited = false;
@@ -98,4 +124,5 @@ namespace NAC {
         std::unordered_set<std::string> InProgress;
         std::chrono::steady_clock::time_point StartTime_;
     };
+
 }
