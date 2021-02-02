@@ -48,14 +48,17 @@ namespace NAC {
         auto& outgoingRequest = request->GetOutGoingRequest();
         request->logger.debug("== OUTGOING REQUEST == ");
         std::cerr << "=== headers ===" << std::endl;
-        for (auto && [header, values] : outgoingRequest.Headers()) {
+        for (auto&& [header, values] : outgoingRequest.Headers()) {
             std::cerr << "  " << header << ":";
-            if(values.size() == 1) {
+
+            if (values.size() == 1) {
                 std::cerr << " " << values.at(0) << std::endl;
-            } else if (values.size() >= 2 ) {
-                for (auto && value : values) {
+
+            } else if (values.size() >= 2) {
+                for (auto&& value : values) {
                     std::cerr << std::endl << "  " << value << std::endl;
                 }
+
             } else {
                 std::cerr << " (empty)" << std::endl;
             }
@@ -66,19 +69,19 @@ namespace NAC {
 
         for (auto&& part : outgoingRequest.Parts()) {
             std::cerr << "[part]" << std::endl;
-            std::string ContentDisposition;
-            NHTTP::THeaderParams ContentDispositionParams;
+            std::string contentDisposition;
+            NHTTP::THeaderParams contentDispositionParams;
             NHTTPUtils::ParseHeader(
                     part.Headers(),
                     "content-disposition",
-                    ContentDisposition,
-                    ContentDispositionParams
+                    contentDisposition,
+                    contentDispositionParams
             );
             std::cerr << "  content-length: " << part.ContentLength() << std::endl;
-            std::cerr << "  content-disposition: " << ContentDisposition << std::endl;
+            std::cerr << "  content-disposition: " << contentDisposition << std::endl;
             std::cerr << "  content-disposition-params: " << std::endl;
 
-            for (auto [key, value]: ContentDispositionParams) {
+            for (auto [key, value]: contentDispositionParams) {
                 std::cerr << "    key='" << key << "', value='" << value << "'" << std::endl;
             }
 
@@ -114,19 +117,12 @@ namespace NAC {
                     continue;
                 }
 
-                const auto& service = graph.Services.at(treeIt.first);
-
-                if(!service.SendRawOutputOf.empty() && !request->GetOutGoingRequest().PartByName(service.SendRawOutputOf)) {
-                    // service has 'send_raw_output_of' directive, but needed output is not received yet.
-                    continue;
-                }
-
                 somethingHappened = true; // found service ready to be requested
 
 #ifdef AC_DEBUG_ROUTERD_PROXY
                 std::cerr << "graph.Services.at(" << treeIt.first << ");" << std::endl;
 #endif
-
+                const auto& service = graph.Services.at(treeIt.first);
                 const auto& host = GetHost(service.HostsFrom);
 
                 // try to connect (no sending yet), and schedule response behavior in a callback
@@ -255,7 +251,6 @@ namespace NAC {
                         std::cerr << "something was sent, which is ok" << std::endl;
 #endif
                     }
-                    std::cerr << "something was sent, which is ok" << std::endl;
                 }
             }
 
