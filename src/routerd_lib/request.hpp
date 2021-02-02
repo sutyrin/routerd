@@ -28,6 +28,15 @@ namespace NAC {
 
             std::cerr <<  out.dump() << std::endl;
         }
+        void debug(nlohmann::json &out) {
+            out["level"] = "DEBUG";
+            out["reqid"] = RequestID;
+            out["spuid"] = NULL;
+            out["spcid"] = NULL;
+            out["message"] = NULL;
+
+            std::cerr <<  out.dump() << std::endl;
+        }
     };
 }
 

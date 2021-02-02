@@ -46,9 +46,13 @@ namespace NAC {
 #ifdef AC_DEBUG_ROUTERD_PROXY
     void TRouterDProxyHandler::PrintOutgoingRequest(std::shared_ptr<TRouterDRequest> request) const{
         auto& outgoingRequest = request->GetOutGoingRequest();
-        request->logger.debug("== OUTGOING REQUEST == ");
-        std::cerr << "=== headers ===" << std::endl;
+        nlohmann::json out;
+        out["request"] = {};
+        out["request"]["headers"] = nlohmann::json::array();
         for (auto&& [header, values] : outgoingRequest.Headers()) {
+            auto header_node = nlohmann::json::object();
+            header_node[header] = values.at(0);
+            out["request"]["headers"].push_back(header_node);
             std::cerr << "  " << header << ":";
 
             if (values.size() == 1) {
@@ -63,6 +67,8 @@ namespace NAC {
                 std::cerr << " (empty)" << std::endl;
             }
         }
+        request->logger.debug(out);
+
         std::cerr << "=== end of headers ===" << std::endl;
 
         std::cerr << "=== parts ===" << std::endl;
