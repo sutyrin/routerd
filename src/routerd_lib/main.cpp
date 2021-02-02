@@ -125,6 +125,10 @@ namespace NAC {
                         service.SendRawOutputOf = service_["send_raw_output_of"].get<std::string>();
                     }
 
+                    if (service_.count("save_as") > 0) {
+                        service.SaveAs = service_["save_as"].get<std::string>();
+                    }
+
                     if (service_.count("path") > 0 && service_.count("send_raw_output_of") > 0) {
                         std::cerr << graph.first << ": cannot have both 'path' and 'send_raw_output_of' specified "
                                   << "for service " << service.Name << std::endl;
@@ -216,12 +220,14 @@ namespace NAC {
                 std::cerr << "=== service dependency tree ===" << std::endl;
                 for (auto&& [name, service] : compiledGraph.Services) {
                     std::cerr << name << ":" << std::endl;
+
                     if (compiledGraph.Tree[name].size() > 0) {
                         std::cerr << "  it depends on these:" << std::endl;
                         for (auto&& node : compiledGraph.Tree[name]) {
                             std::cerr << "    " << node << std::endl;
                         }
                     }
+
                     if(compiledGraph.ReverseTree[name].size() > 0) {
                         std::cerr << "  these depend on it:" << std::endl;
                         for (auto&& node : compiledGraph.ReverseTree[name]) {
@@ -232,17 +238,28 @@ namespace NAC {
                 std::cerr << "=== end of service dependency tree ===" << std::endl;
 #endif
 
-//                for (auto&& [name, service] : compiledGraph.Services) {
-//                    if (!service.SendRawOutputOf.empty()) {
-//                        if (compiledGraph.Tree.count(name) == 0
-//                            || compiledGraph.Tree[name].count(service.SendRawOutputOf) == 0
-//                        ) {
-//                            std::cerr << name << ": 'send_raw_output_of' = '" << service.SendRawOutputOf << "', "
-//                                      << "but service " << service.SendRawOutputOf << " is not defined as "
-//                                      << "a dependency of service " << name << std::endl;
-//                        }
-//                    }
-//                }
+                for (auto&& [name, service] : compiledGraph.Services) {
+                    if (!service.SendRawOutputOf.empty()) {
+                        if (
+                            compiledGraph.Tree.count(name) == 0
+                            || compiledGraph.Tree[name].count(service.SendRawOutputOf) == 0
+                        ) {
+                            std::cerr << name << ": service " << name
+                                      << " has 'send_raw_output_of' = '" << service.SendRawOutputOf << "', "
+                                      << "but service " << service.SendRawOutputOf << " is not defined as "
+                                      << "a dependency of service " << name << std::endl;
+                            return 1;
+                        }
+                    }
+                    if (
+                        !service.SaveAs.empty()
+                        && (compiledGraph.Services.count(service.SaveAs) > 0|| dummyServices.count(service.SaveAs) > 0)
+                    ) {
+                        std::cerr << name << ": service " << name << " has 'save_as' = '" << service.SaveAs << "'"
+                                  << ", which is a name of another service, which is wrong" << std::endl;
+                        return 1;
+                    }
+                }
 
             } else {
                 compiledGraph.Tree = tree;
@@ -309,8 +326,7 @@ namespace NAC {
             args.BindPort6 = args.BindPort4 = config["port"].get<unsigned short>();
             args.ThreadCount = ((config.count("threads") > 0) ? config["threads"].get<size_t>() : 10);
             args.ClientArgsFactory = [&router, &requestFactory]() {
-                return new NHTTPServer::TClient::TArgs(
-                        router, std::forward<NHTTPServer::TClient::TArgs::TRequestFactory>(requestFactory));
+                return new NHTTPServer::TClient::TArgs(router, std::forward<NHTTPServer::TClient::TArgs::TRequestFactory>(requestFactory));
             };
 
             NHTTPServer::TServer(args, router).Run();

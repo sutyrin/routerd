@@ -19,7 +19,7 @@ else()
     add_compile_options("-O3")
 endif()
 
-#add_definitions(-DAC_DEBUG_ROUTERD_PROXY)
+add_definitions(-DAC_DEBUG_ROUTERD_PROXY)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${AC_COMMON_CXX_FLAGS} ${AC_TCMALLOC_CXX_FLAGS} ${AC_DEBUG_CXX_FLAGS} ${CMAKE_CXX_FLAGS}")
