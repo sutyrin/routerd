@@ -48,6 +48,7 @@ namespace NAC {
         auto& outgoingRequest = request->GetOutGoingRequest();
         nlohmann::json out;
         out["request"] = {};
+
         out["request"]["headers"] = nlohmann::json::array();
         for (auto&& [header, values] : outgoingRequest.Headers()) {
             auto header_node = nlohmann::json::object();
@@ -67,14 +68,11 @@ namespace NAC {
                 std::cerr << " (empty)" << std::endl;
             }
         }
-        request->logger.debug(out);
 
-        std::cerr << "=== end of headers ===" << std::endl;
-
-        std::cerr << "=== parts ===" << std::endl;
+        out["request"]["parts"] = nlohmann::json::array();
 
         for (auto&& part : outgoingRequest.Parts()) {
-            std::cerr << "[part]" << std::endl;
+            auto part_node = nlohmann::json::object();
             std::string contentDisposition;
             NHTTP::THeaderParams contentDispositionParams;
             NHTTPUtils::ParseHeader(
@@ -83,13 +81,30 @@ namespace NAC {
                     contentDisposition,
                     contentDispositionParams
             );
+            part_node["content-length"] = part.ContentLength();
+            part_node["content-disposition"] = contentDisposition;
+            part_node["content-disposition-params"] = nullptr;
+
+
             std::cerr << "  content-length: " << part.ContentLength() << std::endl;
             std::cerr << "  content-disposition: " << contentDisposition << std::endl;
             std::cerr << "  content-disposition-params: " << std::endl;
 
+            std::string part_filename;
+
             for (auto [key, value]: contentDispositionParams) {
+                part_node["content-disposition-params"][key] = value;
+                if (key == "filename") {
+                    part_filename = value;
+                }
                 std::cerr << "    key='" << key << "', value='" << value << "'" << std::endl;
             }
+            if (!part_filename.empty()) {
+                part_node["filename"] = part_filename;
+            }
+
+            out["request"]["parts"].push_back(part_node);
+            // FIXME below
 
             for (auto [name, value] : part.Headers()) {
                 std::cerr << "  [header] " << name << ": " << std::endl;
@@ -103,6 +118,9 @@ namespace NAC {
                       << "[/content]" << std::endl;
             std::cerr << "[/part]" << std::endl;
         }
+
+        request->logger.debug(out);
+
 
         std::cerr << "=== end of parts ===" << std::endl;
         std::cerr << "== END OF OUTGOING REQUEST == " << std::endl;
