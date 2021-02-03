@@ -51,9 +51,7 @@ namespace NAC {
             const NHTTP::TAbstractMessage* part,
             bool contentDispositionFormData = true
         ) const;
-#ifdef AC_DEBUG_ROUTERD_PROXY
-        void PrintOutgoingRequest(std::shared_ptr<TRouterDRequest> request) const;
-#endif
+        void PrintOutgoingRequest(std::shared_ptr<TRouterDRequest> request, const std::string& to_service) const;
 
     private:
         const std::unordered_map<std::string, std::vector<TServiceHost>>& Hosts;

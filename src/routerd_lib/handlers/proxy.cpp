@@ -43,33 +43,33 @@ namespace NAC {
     }
 
 
-#ifdef AC_DEBUG_ROUTERD_PROXY
-    void TRouterDProxyHandler::PrintOutgoingRequest(std::shared_ptr<TRouterDRequest> request) const{
+    void TRouterDProxyHandler::PrintOutgoingRequest(std::shared_ptr<TRouterDRequest> request,
+                                                    const std::string& to_service) const{
         auto& outgoingRequest = request->GetOutGoingRequest();
         nlohmann::json out;
         out["request"] = {};
+        out["request"]["to_service"] = to_service;
 
-        out["request"]["headers"] = nlohmann::json::array();
+        out["request"]["headers"] = nlohmann::json::object();
         for (auto&& [header, values] : outgoingRequest.Headers()) {
-            auto header_node = nlohmann::json::object();
-            header_node[header] = values.at(0);
-            out["request"]["headers"].push_back(header_node);
-            std::cerr << "  " << header << ":";
+            out["request"]["headers"][header] = values.at(0);
+//            std::cerr << "  " << header << ":";
 
             if (values.size() == 1) {
-                std::cerr << " " << values.at(0) << std::endl;
+//                std::cerr << " " << values.at(0) << std::endl;
 
             } else if (values.size() >= 2) {
                 for (auto&& value : values) {
-                    std::cerr << std::endl << "  " << value << std::endl;
+//                    std::cerr << std::endl << "  " << value << std::endl;
                 }
 
             } else {
-                std::cerr << " (empty)" << std::endl;
+//                std::cerr << " (empty)" << std::endl;
             }
         }
 
-        out["request"]["parts"] = nlohmann::json::array();
+        out["request"]["part_list"] = nlohmann::json::array();
+        out["request"]["parts"] = nlohmann::json::object();
 
         for (auto&& part : outgoingRequest.Parts()) {
             auto part_node = nlohmann::json::object();
@@ -82,50 +82,57 @@ namespace NAC {
                     contentDispositionParams
             );
             part_node["content-length"] = part.ContentLength();
-            part_node["content-disposition"] = contentDisposition;
-            part_node["content-disposition-params"] = nullptr;
+//            part_node["content-disposition"] = contentDisposition;
+//            part_node["content-disposition-params"] = nullptr;
 
 
-            std::cerr << "  content-length: " << part.ContentLength() << std::endl;
-            std::cerr << "  content-disposition: " << contentDisposition << std::endl;
-            std::cerr << "  content-disposition-params: " << std::endl;
+//            std::cerr << "  content-length: " << part.ContentLength() << std::endl;
+//            std::cerr << "  content-disposition: " << contentDisposition << std::endl;
+//            std::cerr << "  content-disposition-params: " << std::endl;
 
             std::string part_filename;
 
             for (auto [key, value]: contentDispositionParams) {
-                part_node["content-disposition-params"][key] = value;
+                if (value.size() >= 2) {
+                    if (value[0] == '"' and value[value.size()-1] == '"') {
+                        value = value.substr(1, value.size() - 2);
+                    }
+                }
+//                part_node["content-disposition-params"][key] = value;
                 if (key == "filename") {
                     part_filename = value;
                 }
-                std::cerr << "    key='" << key << "', value='" << value << "'" << std::endl;
+//                std::cerr << "    key='" << key << "', value='" << value << "'" << std::endl;
             }
             if (!part_filename.empty()) {
                 part_node["filename"] = part_filename;
             }
 
-            out["request"]["parts"].push_back(part_node);
             // FIXME below
-
+//            part_node["headers"] = nlohmann::json::object();
             for (auto [name, value] : part.Headers()) {
-                std::cerr << "  [header] " << name << ": " << std::endl;
+//                std::cerr << "  [header] " << name << ": " << std::endl;
+                part_node["headers"][name] = value.at(0);
 
                 for (auto v : value) {
                     std::cerr << "    " << v << std::endl;
                 }
             }
 
-            std::cerr << "  [content]" << std::string(part.Content(), part.ContentLength())
-                      << "[/content]" << std::endl;
-            std::cerr << "[/part]" << std::endl;
+            std::string content = std::string(part.Content(), part.ContentLength());
+            // TODO: parse, encode and truncate content if needed
+
+            part_node["content"] = content;
+
+            if (!part_filename.empty()) {
+                out["request"]["parts"][part_filename] = content;
+            }
+
+            out["request"]["part_list"].push_back(part_node);
         }
 
         request->logger.debug(out);
-
-
-        std::cerr << "=== end of parts ===" << std::endl;
-        std::cerr << "== END OF OUTGOING REQUEST == " << std::endl;
     }
-#endif
 
     void TRouterDProxyHandler::Iter(std::shared_ptr<TRouterDRequest> request, const std::vector<std::string>& args) const {
         auto&& graph = request->GetGraph();
@@ -193,7 +200,7 @@ namespace NAC {
                 request->NewRequest(service.Name);
 
 #ifdef AC_DEBUG_ROUTERD_PROXY
-                PrintOutgoingRequest(request);
+                PrintOutgoingRequest(request, service.Name);
 #endif
                 // schedule payload to be sent to connected service
                 if (!service.SendRawOutputOf.empty()) {
